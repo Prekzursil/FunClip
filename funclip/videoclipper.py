@@ -6,6 +6,7 @@
 import re
 import os
 import sys
+import tempfile
 import copy
 import librosa
 import logging
@@ -154,7 +155,11 @@ class VideoClipper():
         else:
             base_name, _ = os.path.splitext(video_filename)
             clip_video_file = base_name + '_clip.mp4'
-            audio_file = base_name + '.wav'
+            # Scratch audio for extraction: use a system temp file rather than a
+            # path derived from the (possibly user-influenced) video location —
+            # the wav is deleted immediately after librosa loads it.
+            _fd, audio_file = tempfile.mkstemp(suffix='.wav', prefix='funclip_')
+            os.close(_fd)
 
         if video.audio is None:
             logging.error("No audio information found.")
