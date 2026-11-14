@@ -83,12 +83,9 @@ if __name__ == "__main__":
             os.environ.get("FUNCLIP_OUTPUT_ROOT") or os.path.join(os.getcwd(), "output")
         )
         leaf = os.path.basename(os.path.normpath(cleaned.rstrip("/\\")))
-        if not leaf or leaf in (".", ".."):
-            target = base
-        else:
-            target = os.path.realpath(os.path.join(base, leaf))
+        target = os.path.realpath(os.path.join(base, leaf))
         prefix = base + os.sep
-        if target != base and not target.startswith(prefix):
+        if not target.startswith(prefix):
             raise ValueError(
                 "output directory must stay under {}".format(base)
             )
