@@ -71,19 +71,29 @@ if __name__ == "__main__":
         The gradio UI can be exposed beyond localhost (--listen / --share), so
         an untrusted visitor must not be able to direct file writes anywhere on
         the host. The requested name is reduced to its final path component
-        (dropping any absolute prefix or traversal sequence) and resolved under
-        FUNCLIP_OUTPUT_ROOT (default: ./output). Blank input keeps the legacy
-        behaviour of writing to a system temp directory (returns None).
+        (dropping any absolute prefix or traversal sequence), normalized with
+        realpath, and then verified to sit under FUNCLIP_OUTPUT_ROOT (default:
+        ./output) before any use. Blank input keeps the legacy behaviour of
+        writing to a system temp directory (returns None).
         """
         cleaned = (raw_dir or "").strip()
         if not cleaned:
             return None
-        base = os.environ.get("FUNCLIP_OUTPUT_ROOT") or os.path.join(os.getcwd(), "output")
-        os.makedirs(base, exist_ok=True)
+        base = os.path.realpath(
+            os.environ.get("FUNCLIP_OUTPUT_ROOT") or os.path.join(os.getcwd(), "output")
+        )
         leaf = os.path.basename(os.path.normpath(cleaned.rstrip("/\\")))
         if not leaf or leaf in (".", ".."):
-            return base
-        return os.path.join(base, leaf)
+            target = base
+        else:
+            target = os.path.realpath(os.path.join(base, leaf))
+        prefix = base + os.sep
+        if target != base and not target.startswith(prefix):
+            raise ValueError(
+                "output directory must stay under {}".format(base)
+            )
+        os.makedirs(target, exist_ok=True)
+        return target
 
     def save_text_to_file(content, extension, output_dir=None):
         if not content:
