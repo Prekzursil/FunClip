@@ -152,6 +152,15 @@ class VideoClipper():
             clip_video_file = base_name + '_clip.mp4'
             audio_file = base_name + '.wav'
             audio_file = os.path.join(output_dir, audio_file)
+            # The name derives from the (user-influenced) upload filename:
+            # normalize and prefix-verify the final path before any use.
+            out_root = os.path.realpath(output_dir)
+            resolved = os.path.realpath(audio_file)
+            if not resolved.startswith(out_root + os.sep):
+                raise ValueError(
+                    "derived audio path escapes the output directory: {}".format(out_root)
+                )
+            audio_file = resolved
         else:
             base_name, _ = os.path.splitext(video_filename)
             clip_video_file = base_name + '_clip.mp4'
