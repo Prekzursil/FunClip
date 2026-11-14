@@ -1,0 +1,14 @@
+# Dependabot version updates — fleet security standard.
+# Weekly, every ecosystem present in the repository, zero ignored updates.
+version: 2
+updates:
+  # Python (requirements.txt)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  # GitHub Actions workflows added by this fleet (codeql.yml)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

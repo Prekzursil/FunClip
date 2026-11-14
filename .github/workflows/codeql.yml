@@ -1,0 +1,53 @@
+# Advanced CodeQL analysis — fleet security standard.
+#
+# Per the fleet CODEQL decision: advanced (workflow) configuration with the
+# security-extended + security-and-quality suites (strictly subsumes the
+# default and extended suites), matrix over every language this repository
+# actually has (Python), triggered on push to main, pull requests targeting
+# main, and a weekly schedule. Results upload to code scanning with a
+# category per language.
+#
+# Python uses build-mode: none — the analysis is interpreted and does not
+# need the (very large, torch-based) requirements installed to extract.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      # upload-sarif to code scanning
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended,security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
