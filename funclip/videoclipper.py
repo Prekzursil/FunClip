@@ -15,7 +15,6 @@ import soundfile as sf
 from moviepy.editor import *
 import moviepy.editor as mpy
 from moviepy.video.tools.subtitles import SubtitlesClip, TextClip
-from moviepy.editor import VideoFileClip, concatenate_videoclips
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from utils.subtitle_utils import generate_srt, generate_srt_clip
 from utils.argparse_tools import ArgumentParser, get_commandline_args
@@ -73,7 +72,11 @@ class VideoClipper():
         res_text = rec_result[0]['text']
         return res_text, res_srt, state
 
-    def clip(self, dest_text, start_ost, end_ost, state, dest_spk=None, output_dir=None, timestamp_list=None):
+    def clip(self, dest_text, start_ost, end_ost, state, dest_spk=None, output_dir=None, timestamp_list=None,
+             add_sub=False):
+        # `add_sub` is accepted for interface parity with video_clip(); audio output
+        # cannot carry burned-in subtitles, so it has no effect here - the clipped
+        # SRT is returned separately.
         # get from state
         audio_input = state['audio_input']
         recog_res_raw = state['recog_res_raw']
@@ -279,7 +282,6 @@ class VideoClipper():
         else:
             clip_video_file = video_filename
             message = "No period found in the audio, return raw speech. You may check the recognition result and try other destination text."
-            srt_clip = ''
         return clip_video_file, message, clip_srt
 
 
@@ -363,7 +365,8 @@ def runner(stage, file, sd_switch, output_dir, dest_text, dest_spk, start_ost, e
     elif ext.lower() in video_suffixs:
         mode = 'video'
     else:
-        logging.error("Unsupported file format: {}\n\nplease choise one of the following: {}".format(file),audio_suffixs+video_suffixs)
+        logging.error("Unsupported file format: {}\n\nplease choose one of the following: {}".format(
+            file, " ".join(audio_suffixs + video_suffixs)))
         sys.exit(1) # exit if the file is not supported
     while output_dir.endswith('/'):
         output_dir = output_dir[:-1]
@@ -389,13 +392,17 @@ def runner(stage, file, sd_switch, output_dir, dest_text, dest_spk, start_ost, e
                                 )
             audio_clipper = VideoClipper(funasr_model)
             audio_clipper.lang = 'en'
+        else:
+            raise ValueError("Unsupported lang '{}': only 'zh' and 'en' are available.".format(lang))
         if mode == 'audio':
             logging.warning("Recognizing audio file: {}".format(file))
             wav, sr = librosa.load(file, sr=16000)
             res_text, res_srt, state = audio_clipper.recog((sr, wav), sd_switch)
-        if mode == 'video':
+        elif mode == 'video':
             logging.warning("Recognizing video file: {}".format(file))
             res_text, res_srt, state = audio_clipper.video_recog(file, sd_switch)
+        else:  # unreachable: mode is validated above; kept so initialization is provable
+            raise ValueError("Unsupported media mode '{}'.".format(mode))
         total_srt_file = output_dir + '/total.srt'
         with open(total_srt_file, 'w') as fout:
             fout.write(res_srt)

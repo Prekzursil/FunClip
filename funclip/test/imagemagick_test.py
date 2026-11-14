@@ -1,7 +1,6 @@
 from moviepy.editor import *
 from moviepy.video.tools.subtitles import SubtitlesClip, TextClip
-from moviepy.editor import VideoFileClip, concatenate_videoclips
-from moviepy.video.compositing import CompositeVideoClip
+from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 
 generator = lambda txt: TextClip(txt, font='./font/STHeitiMedium.ttc', fontsize=48, color='white')
 subs = [((0, 2), 'sub1中文字幕'),

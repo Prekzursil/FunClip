@@ -1,7 +1,6 @@
 from g4f.client import Client
 
 if __name__ == '__main__':
-    from llm.demo_prompt import demo_prompt
     client = Client()
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
