@@ -65,6 +65,33 @@ if __name__ == "__main__":
     if args.listen:
         server_name = '0.0.0.0'
         
+    def _safe_output_dir(raw_dir):
+        """Constrain a user-supplied output directory to the app's output root.
+
+        The gradio UI can be exposed beyond localhost (--listen / --share), so
+        an untrusted visitor must not be able to direct file writes anywhere on
+        the host. The requested name is reduced to its final path component
+        (dropping any absolute prefix or traversal sequence), normalized with
+        realpath, and then verified to sit under FUNCLIP_OUTPUT_ROOT (default:
+        ./output) before any use. Blank input keeps the legacy behaviour of
+        writing to a system temp directory (returns None).
+        """
+        cleaned = (raw_dir or "").strip()
+        if not cleaned:
+            return None
+        base = os.path.realpath(
+            os.environ.get("FUNCLIP_OUTPUT_ROOT") or os.path.join(os.getcwd(), "output")
+        )
+        leaf = os.path.basename(os.path.normpath(cleaned.rstrip("/\\")))
+        target = os.path.realpath(os.path.join(base, leaf))
+        prefix = base + os.sep
+        if not target.startswith(prefix):
+            raise ValueError(
+                "output directory must stay under {}".format(base)
+            )
+        os.makedirs(target, exist_ok=True)
+        return target
+
     def save_text_to_file(content, extension, output_dir=None):
         if not content:
             return None
@@ -94,12 +121,7 @@ if __name__ == "__main__":
             )
 
     def mix_recog(video_input, audio_input, hotwords, output_dir):
-        output_dir = output_dir.strip()
-        if not len(output_dir):
-            output_dir = None
-        else:
-            output_dir = os.path.abspath(output_dir)
-        audio_state, video_state = None, None
+        output_dir = _safe_output_dir(output_dir)
         if video_input is not None:
             res_text, res_srt, video_state = video_recog(
                 video_input, 'No', hotwords, output_dir=output_dir)
@@ -112,14 +134,10 @@ if __name__ == "__main__":
             text_file = save_text_to_file(res_text, 'txt', output_dir)
             srt_file = save_text_to_file(res_srt, 'srt', output_dir)
             return res_text, res_srt, None, audio_state, text_file, srt_file
+        return None, None, None, None, None, None
     
     def mix_recog_speaker(video_input, audio_input, hotwords, output_dir):
-        output_dir = output_dir.strip()
-        if not len(output_dir):
-            output_dir = None
-        else:
-            output_dir = os.path.abspath(output_dir)
-        audio_state, video_state = None, None
+        output_dir = _safe_output_dir(output_dir)
         if video_input is not None:
             res_text, res_srt, video_state = video_recog(
                 video_input, 'Yes', hotwords, output_dir=output_dir)
@@ -132,13 +150,10 @@ if __name__ == "__main__":
             text_file = save_text_to_file(res_text, 'txt', output_dir)
             srt_file = save_text_to_file(res_srt, 'srt', output_dir)
             return res_text, res_srt, None, audio_state, text_file, srt_file
+        return None, None, None, None, None, None
     
     def mix_clip(dest_text, video_spk_input, start_ost, end_ost, video_state, audio_state, output_dir):
-        output_dir = output_dir.strip()
-        if not len(output_dir):
-            output_dir = None
-        else:
-            output_dir = os.path.abspath(output_dir)
+        output_dir = _safe_output_dir(output_dir)
         if video_state is not None:
             clip_video_file, message, clip_srt = audio_clipper.video_clip(
                 dest_text, start_ost, end_ost, video_state, dest_spk=video_spk_input, output_dir=output_dir)
@@ -147,13 +162,10 @@ if __name__ == "__main__":
             (sr, res_audio), message, clip_srt = audio_clipper.clip(
                 dest_text, start_ost, end_ost, audio_state, dest_spk=video_spk_input, output_dir=output_dir)
             return None, (sr, res_audio), message, clip_srt
+        return None, None, "No recognition state found: run recognition first.", ""
     
     def video_clip_addsub(dest_text, video_spk_input, start_ost, end_ost, state, output_dir, font_size, font_color):
-        output_dir = output_dir.strip()
-        if not len(output_dir):
-            output_dir = None
-        else:
-            output_dir = os.path.abspath(output_dir)
+        output_dir = _safe_output_dir(output_dir)
         return audio_clipper.video_clip(
             dest_text, start_ost, end_ost, state, 
             font_size=font_size, font_color=font_color, 
@@ -170,16 +182,14 @@ if __name__ == "__main__":
             model = "-".join(model.split('-')[1:])
             return g4f_openai_call(model, system_content, user_content+'\n'+srt_text)
         else:
-            logging.error("LLM name error, only {} are supported as LLM name prefix."
-                          .format(SUPPORT_LLM_PREFIX))
+            error = ("LLM name error, only {} are supported as LLM name prefix."
+                     .format(SUPPORT_LLM_PREFIX))
+            logging.error(error)
+            return error
     
     def AI_clip(LLM_res, dest_text, video_spk_input, start_ost, end_ost, video_state, audio_state, output_dir):
         timestamp_list = extract_timestamps(LLM_res)
-        output_dir = output_dir.strip()
-        if not len(output_dir):
-            output_dir = None
-        else:
-            output_dir = os.path.abspath(output_dir)
+        output_dir = _safe_output_dir(output_dir)
         if video_state is not None:
             clip_video_file, message, clip_srt = audio_clipper.video_clip(
                 dest_text, start_ost, end_ost, video_state, 
@@ -190,14 +200,11 @@ if __name__ == "__main__":
                 dest_text, start_ost, end_ost, audio_state, 
                 dest_spk=video_spk_input, output_dir=output_dir, timestamp_list=timestamp_list, add_sub=False)
             return None, (sr, res_audio), message, clip_srt
+        return None, None, "No recognition state found: run recognition first.", ""
     
     def AI_clip_subti(LLM_res, dest_text, video_spk_input, start_ost, end_ost, video_state, audio_state, output_dir):
         timestamp_list = extract_timestamps(LLM_res)
-        output_dir = output_dir.strip()
-        if not len(output_dir):
-            output_dir = None
-        else:
-            output_dir = os.path.abspath(output_dir)
+        output_dir = _safe_output_dir(output_dir)
         if video_state is not None:
             clip_video_file, message, clip_srt = audio_clipper.video_clip(
                 dest_text, start_ost, end_ost, video_state, 
@@ -208,6 +215,7 @@ if __name__ == "__main__":
                 dest_text, start_ost, end_ost, audio_state, 
                 dest_spk=video_spk_input, output_dir=output_dir, timestamp_list=timestamp_list, add_sub=True)
             return None, (sr, res_audio), message, clip_srt
+        return None, None, "No recognition state found: run recognition first.", ""
     
     # gradio interface
     theme = gr.Theme.load("funclip/utils/theme.json")
@@ -235,10 +243,8 @@ if __name__ == "__main__":
                                 [audio_input],
                                 label="示例音频 | Demo Audio")
                     with gr.Column():
-                        # with gr.Row():
-                            # video_sd_switch = gr.Radio(["No", "Yes"], label="👥区分说话人 Get Speakers", value='No')
                         hotwords_input = gr.Textbox(label="🚒 热词 | Hotwords(可以为空，多个热词使用空格分隔，仅支持中文热词)")
-                        output_dir = gr.Textbox(label="📁 文件输出路径 | File Output Dir (可以为空，Linux, mac系统可以稳定使用)", value=" ")
+                        output_dir = gr.Textbox(label="📁 文件输出目录名 | Output Dir Name (可以为空；写入 FUNCLIP_OUTPUT_ROOT 下的同名子目录，默认 ./output)", value=" ")
                         with gr.Row():
                             recog_button = gr.Button("👂 识别 | ASR", variant="primary")
                             recog_button2 = gr.Button("👂👫 识别+区分说话人 | ASR+SD")
